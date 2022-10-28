@@ -100,15 +100,19 @@ def get_cash(asset):
 
 
 def order(symbol, qty, type):
-    if type.lower() == 'buy'.lower() or type.lower() == 'b'.lower():
-        order = client.order_market_buy(symbol=symbol, quantity=qty)
+    try:
+        if type.lower() == 'buy'.lower() or type.lower() == 'b'.lower():
+            order = client.order_market_buy(symbol=symbol, quantity=qty)
 
-    elif type.lower() == 'sell'.lower() or type.lower() == 's'.lower():
-        order = client.order_market_sell(symbol=symbol, quantity=qty)
-    else:
-        print("Wrong order type")
+        elif type.lower() == 'sell'.lower() or type.lower() == 's'.lower():
+            order = client.order_market_sell(symbol=symbol, quantity=qty)
+        else:
+            print("Wrong order type")
+            return None
+        return order
+    except Exception as e:
+        print(e)
         return None
-    return order
 
 
 def bot_binance(df, symbol, asset_1, asset_2, stop_loss, take_profit, print_action, is_bought, profit,
@@ -117,31 +121,33 @@ def bot_binance(df, symbol, asset_1, asset_2, stop_loss, take_profit, print_acti
     ema_single = df.single_ema[0]
     rsi = df.rsi[0]
     close_price = df.close[0]
+    asset_1_cash = get_cash(asset_1)
+    asset_2_cash = get_cash(asset_2)
+    min_qty = get_min_qty(symbol)
     # open_price = df['open'].values
     # high_price = df['high'].values
     # low_price = df['low'].values
     # volume = df['volume'].values
 
     if not is_bought and sma_single == 1:  # and ema_single == 1:
-        if get_cash(asset_1) > close_price:  # check if you have money
+        if asset_1_cash > close_price:  # check if you have money
 
-            order(symbol, get_min_qty(symbol), 'buy')  # place Buy Order
-            is_bought = True
-
-            last_bought_price = close_price  # set bought price
-
-            last_max_value = close_price  # max price since bought, used for dynamic stop loss
-
-            # bot feed action back
-
-            if print_action:
-                print("buy", close_price)
+            is_order_placed = order(symbol, min_qty, 'buy')  # place Buy Order
+            if is_order_placed is not None:
+                is_bought = True
+                last_bought_price = close_price  # set bought price
+                last_max_value = close_price  # max price since bought, used for dynamic stop loss
+                if print_action:
+                    print("buy", close_price, "Min Qty:", min_qty)
+            else:
+                if print_action:
+                    print("buy order failed",close_price, "Min Qty:", min_qty)
         else:
             if print_action:
                 print("not enough cash to buy")
 
     elif is_bought and sma_single == 0:  # and ema_single == 0 : # normal Sell
-        if get_cash(asset_2) > get_min_qty(symbol):  # check if you have money
+        if asset_2_cash > min_qty:  # check if you have money
 
             if close_price > last_max_value:  # update max value since bought, needed for dynamic stop loss
                 last_max_value = close_price
@@ -149,32 +155,39 @@ def bot_binance(df, symbol, asset_1, asset_2, stop_loss, take_profit, print_acti
             if close_price < (last_max_value * (1 - stop_loss)) or close_price > (
                     last_bought_price * (1 + take_profit)):
 
-                order(symbol, get_min_qty(symbol), 'sell')  # place Sell Order
-                is_bought = False
+                is_order_placed = order(symbol, min_qty, 'sell')  # place Sell Order
+                if is_order_placed is not None:
+                    is_bought = False
+                    value = (close_price - last_bought_price)
+                    profit += value
 
-                value = (close_price - last_bought_price)
-                profit += value
-
-                if print_action:
-                    print("Sell", close_price, "Profit: ", profit)
+                    if print_action:
+                        print("Sell", close_price, "Min Qty:", min_qty, "Profit: ", profit)
+                else:
+                    if print_action:
+                        print("sell order failed",close_price, "Min Qty:", min_qty)
 
     elif is_bought and \
             (close_price < (last_max_value * (1 - stop_loss)) or
-             close_price > (last_bought_price * (1 + take_profit))):  # Emergencey Sell Stop Loss
+             close_price > (last_bought_price * (1 + take_profit))):  # Emergencey Sell Stop Loss / Take Profit
 
-        if get_cash(asset_2) > get_min_qty(symbol):  # check if you have money
+        if asset_2_cash > min_qty:  # check if you have money
 
             if close_price > last_max_value:  # update max value since bought, needed for dynamic stop loss
                 last_max_value = close_price
 
-            order(symbol, get_min_qty(symbol), 'sell')  # place Sell Order
-            is_bought = False
+            is_order_placed = order(symbol, min_qty, 'sell')  # place Sell Order
 
-            value = (close_price - last_bought_price)
-            profit += value
+            if is_order_placed is not None:
+                is_bought = False
+                value = (close_price - last_bought_price)
+                profit += value
 
-            if print_action:
-                print("Sell", close_price, "Profit: ", profit)
+                if print_action:
+                    print("Sell", close_price, "Min Qty:", min_qty, "Profit: ", profit)
+            else:
+                if print_action:
+                    print("sell order failed",close_price, "Min Qty:", min_qty)
 
         else:
             if print_action:
@@ -189,10 +202,14 @@ def run(symbol, asset_1, asset_2, interval='1m',
         profit=0, last_bought_price=-1, last_max_value=-1):
     limit = sma_long if sma_long > ema_long else ema_long
 
-    df = get_data(symbol, interval, sma_short=5, sma_long=20, ema_short=5, ema_long=20, rsi_period=14)[-limit:]
+    df = get_data(symbol, interval, sma_short=sma_short, sma_long=sma_long, ema_short=ema_short, ema_long=ema_long,
+                  rsi_period=rsi_period)[-limit:]
+
     last_open_time = df.index[-1]
     while True:
-        df = get_data(symbol, interval, sma_short=5, sma_long=20, ema_short=5, ema_long=20, rsi_period=14)[-1:]
+        df = get_data(symbol, interval, sma_short=sma_short, sma_long=sma_long, ema_short=ema_short, ema_long=ema_long,
+                      rsi_period=rsi_period)[-1:]
+
         if df.index[-1] > last_open_time:
             last_open_time = df.index[-1]
             close_price = df.close[-1]
