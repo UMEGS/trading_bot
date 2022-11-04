@@ -15,22 +15,24 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
-
+from stock import Stock
 
 
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
-google = yf.Ticker("GOOG")
-google_hist = google.history(period="1d", interval="1m")
+api_key = 'hPZcl6C7b1NFfMNc2whnh2OSyxsWxyEIEP2mKDypUYDrG70eeB4rniELcx0KnAwD'
+api_secret = 'tF6fS7kskVztUbDA5jkXt8GAdXLoJ82C9BaspK0F9AbV2MuG2aGZOcLoboOOUgX6'
+stock = Stock(api_key, api_secret, testnet=True)
+df = stock.get_klines('TRXUSDT', '1m', '1 day ago UTC', 'now UTC')
 
 data = {
-    'Date': google_hist.index.values,
-    'Open': google_hist.Open.values,
-    'High': google_hist.High.values,
-    'Low': google_hist.Low.values,
-    'Close': google_hist.Close.values,
-    'Volume': google_hist.Volume.values
+    'Date': df.index.values,
+    'Open': df.open.values,
+    'High': df.high.values,
+    'Low': df.low.values,
+    'Close': df.close.values,
+    'Volume': df.volume.values
 }
 
 
@@ -51,13 +53,13 @@ app.layout = html.Div(
 
 @app.callback(Output('live-update-text', 'children'),Input('interval-component', 'n_intervals'))
 def update_metrics(n):
-    google_hist = google.history(period="1d", interval="1m")[-1:]
+    df = stock.get_klines('TRXUSDT', '1m', '1 day ago UTC', 'now UTC')[-1:]
     style = {'padding': '5px', 'fontSize': '16px'}
     return [
-        html.Span('Open: {0:.2f}'.format(google_hist.Open[0]), style=style),
-        html.Span('Close: {0:.2f}'.format(google_hist.Close[0]), style=style),
-        html.Span('High: {0:0.2f}'.format(google_hist.High[0]), style=style),
-        html.Span('Low: {0:0.2f}'.format(google_hist.Low[0]), style=style),
+        html.Span('Open: {0:.5f}'.format(df.open[0]), style=style),
+        html.Span('Close: {0:.5f}'.format(df.close[0]), style=style),
+        html.Span('High: {0:0.5f}'.format(df.high[0]), style=style),
+        html.Span('Low: {0:0.5f}'.format(df.low[0]), style=style),
     ]
 
 
@@ -67,41 +69,25 @@ def update_graph_live(n):
     global data
 
     fig = plotly.subplots.make_subplots(rows=1, cols=1, row_heights=[100])
-    fig.append_trace({
+    fig.add_trace({
         'x': data['Date'],
         'y': data['Close'],
         'name': 'GOOG',
         'type': 'scatter'
     }, 1, 1)
 
-    google_hist = google.history(period="1d", interval="1m")
+    df = stock.get_klines('TRXUSDT', '1m', '1 day ago UTC', 'now UTC')[-1:]
     data = {
-        'Date': google_hist.index.values,
-        'Open': google_hist.Open.values,
-        'High': google_hist.High.values,
-        'Low': google_hist.Low.values,
-        'Close': google_hist.Close.values,
-        'Volume': google_hist.Volume.values
+        'Date': df.index.values,
+        'Open': df.open.values,
+        'High': df.high.values,
+        'Low': df.low.values,
+        'Close': df.close.values,
+        'Volume': df.volume.values
     }
 
     return fig
 
 
 if __name__ == '__main__':
-    import gym
-
-    from stable_baselines3 import A2C
-
-    env = gym.make("CartPole-v1")
-
-    model = A2C("MlpPolicy", env, verbose=1)
-    model.learn(total_timesteps=10_000)
-
-    obs = env.reset()
-    for i in range(1000):
-        action, _state = model.predict(obs, deterministic=True)
-        obs, reward, done, info = env.step(action)
-        env.render()
-        if done:
-            obs = env.reset()
-    # app.run_server(debug=True)
+    app.run_server(debug=True)
