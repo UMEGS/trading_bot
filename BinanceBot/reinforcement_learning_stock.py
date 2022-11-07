@@ -236,7 +236,7 @@ if __name__ == "__main__":
 
     symbol = 'BTCUSDT'
 
-    df = stock.get_klines(symbol, '1m', '1 day ago UTC', 'now UTC')
+    df = stock.get_klines(symbol, '1m', '6 day ago UTC', 'now UTC')
 
 
     # df = pd.read_pickle('../datafram.pkl')[:200]
@@ -259,12 +259,12 @@ if __name__ == "__main__":
     # signal_column = ['single_sma','single_ema', 'single_dmp', 'double_dmp', 'single_rsi', 'double_ema', 'double_sma']
     signal_column = ['single_sma', 'single_ema', 'single_rsi' ]
 
-    base_currency_amount = 100000
+    base_currency_amount = 10000
     quote_currency_amount = 2
 
     episodes, alpha, gamma, epsilon, epsilon_decay = 1000, 0.9, 0.9, 0.9, 0.99
 
-    RESET = True
+    RESET = False
 
     if not RESET:
         if os.path.exists(CONFIG_FILE):
@@ -280,8 +280,8 @@ if __name__ == "__main__":
     env = StockTradingEnv(df, base_currency_amount, quote_currency_amount,possible_values,
                           action_space, signal_column, is_load, path)
 
-    # env.test()
-    qtable = env.learn(episodes, alpha, gamma, epsilon, epsilon_decay)
-    qtable.to_csv(path, index=False, header=True)
-    print(qtable)
+    env.test()
+    # qtable = env.learn(episodes, alpha, gamma, epsilon, epsilon_decay)
+    # qtable.to_csv(path, index=False, header=True)
+    # print(qtable)
 
